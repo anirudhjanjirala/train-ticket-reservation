@@ -1,35 +1,38 @@
 name: ci/cd pipeline to deploy to tomcat
-on: 
+
+on:
   push:
-    branches: master
+    branches: [ master ]
+
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: checkout code
+      - name: Checkout code
         uses: actions/checkout@v3
-      
-      - name: set-up jdk
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
-          java-version: '17'   # Updated Java version
-      
-      - name: validate with maven
+          java-version: '17'
+
+      - name: Validate with Maven
         run: mvn validate
 
-      - name: compile with maven
+      - name: Compile with Maven
         run: mvn compile
-      
-      - name: test with maven
-         run: mvn test
-      
-      - name: package with maven
+
+      - name: Test with Maven
+        run: mvn test
+
+      - name: Package with Maven
         run: mvn clean package
 
-      - name: verify WAR file
+      - name: Verify WAR file
         run: ls -lh target/
-      
+
       - name: Build, Test and SonarQube Scan
         run: |
           mvn clean verify sonar:sonar \
@@ -37,14 +40,13 @@ jobs:
             -Dsonar.host.url="${{ secrets.SONAR_HOST_URL }}" \
             -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
-      - name: check tomcat connection
+      - name: Check Tomcat connection
         run: |
-                 curl --fail --anyauth -u "${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }}" \
-                 "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/list"
+          curl --fail --anyauth -u "${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }}" \
+          "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/list"
 
-          # Deploy to Tomcat
-      - name: deploy war to tomcat
-        run: | 
-                curl -v -u ${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }} \
-                  -T target/TrainBook-1.0.0-SNAPSHOT.war \
-                   "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+      - name: Deploy WAR to Tomcat
+        run: |
+          curl -v -u "${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }}" \
+          -T target/TrainBook-1.0.0-SNAPSHOT.war \
+          "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/deploy?path=/TrainBook&update=true"
