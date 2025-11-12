@@ -27,7 +27,7 @@ jobs:
         distribution: 'temurin'
 
     # ---------------------
-    # 3️⃣ Create Maven settings.xml for Nexus
+    # 3️⃣ Configure Maven Settings for Nexus
     # ---------------------
     - name: Configure Maven Settings for Nexus
       run: |
@@ -78,7 +78,7 @@ jobs:
     # 6️⃣ Deploy to Tomcat (only if Nexus deploy succeeds)
     # ---------------------
     - name: Deploy to Apache Tomcat
-      if: success()   # ✅ Runs only if previous step succeeded
+      if: success()
       env:
         TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
         TOMCAT_USER: ${{ secrets.TOMCAT_USER }}
