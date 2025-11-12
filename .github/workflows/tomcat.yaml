@@ -1,4 +1,4 @@
-name: CI-CD Pipeline (SonarQube + Nexus + Tomcat)
+name: CI/CD Pipeline (SonarQube + Nexus + Tomcat)
 
 on:
   push:
