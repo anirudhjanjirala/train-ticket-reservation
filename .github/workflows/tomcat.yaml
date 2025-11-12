@@ -59,7 +59,8 @@ jobs:
     - name: 📦 5. Deploy Artifact to Nexus
       run: |
         mvn -B deploy --settings ~/.m2/settings.xml \
-          -DaltDeploymentRepository=nexus-releases::default::${{ secrets.NEXUS_URL }}/repository/maven-releases/
+          -DaltDeploymentRepository=nexus-snapshots::default::${{ secrets.NEXUS_URL }}/repository/maven-snapshots/
+
 
     - name: 🗂 6. Check WAR File Size
       run: |
