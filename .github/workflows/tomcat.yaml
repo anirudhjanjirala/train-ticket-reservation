@@ -1,76 +1,89 @@
-name: Java CI/CD Pipeline - SonarQube → Nexus → Tomcat
+name: CI-CD Pipeline (SonarQube + Nexus + Tomcat)
 
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
-
-env:
-  NEXUS_URL: ${{ secrets.NEXUS_URL }}
-  TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
 
 jobs:
-  build-analyze-deploy:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 🧾 1. Checkout Code
+    # ---------------------
+    # 1️⃣ Checkout Source Code
+    # ---------------------
+    - name: Checkout Code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: ☕ 2. Set up JDK 17
+    # ---------------------
+    # 2️⃣ Setup Java and Maven
+    # ---------------------
+    - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: 'maven'
 
-    - name: ⚙️ 3. Configure Maven settings.xml
-      uses: s4u/maven-settings-action@v3.0.0
-      with:
-        servers: |
-          [
-            {
-              "id": "nexus-releases",
-              "username": "${{ secrets.NEXUS_USERNAME }}",
-              "password": "${{ secrets.NEXUS_PASSWORD }}"
-            },
-            {
-              "id": "tomcat-server",
-              "username": "${{ secrets.TOMCAT_USER }}",
-              "password": "${{ secrets.TOMCAT_PASSWORD }}"
-            }
-          ]
-        sonatypeSnapshots: false
-        apacheSnapshots: false
-        override: true
-        githubServer: true
-        oracleRepo: false
-
-    - name: 🧪 4. Build and Analyze with SonarQube
+    # ---------------------
+    # 3️⃣ Create Maven settings.xml for Nexus
+    # ---------------------
+    - name: Configure Maven Settings for Nexus
       run: |
-        mvn -B clean verify sonar:sonar --settings ~/.m2/settings.xml \
-          -Dsonar.projectKey=train-ticket-reservation \
+        mkdir -p ~/.m2
+        cat > ~/.m2/settings.xml <<EOF
+        <settings>
+          <servers>
+            <server>
+              <id>nexus-snapshots</id>
+              <username>${{ secrets.NEXUS_USERNAME }}</username>
+              <password>${{ secrets.NEXUS_PASSWORD }}</password>
+            </server>
+          </servers>
+          <mirrors>
+            <mirror>
+              <id>nexus</id>
+              <url>${{ secrets.NEXUS_URL }}/repository/maven-public/</url>
+              <mirrorOf>*</mirrorOf>
+            </mirror>
+          </mirrors>
+        </settings>
+        EOF
+
+    # ---------------------
+    # 4️⃣ Run SonarQube Analysis
+    # ---------------------
+    - name: SonarQube Code Analysis
+      env:
+        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      run: |
+        mvn -B clean verify sonar:sonar \
+          -Dsonar.projectKey=TrainBook \
           -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
           -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-    - name: 📦 5. Deploy Artifact to Nexus
+    # ---------------------
+    # 5️⃣ Build and Deploy to Nexus
+    # ---------------------
+    - name: Build and Deploy to Nexus
+      env:
+        NEXUS_URL: ${{ secrets.NEXUS_URL }}
       run: |
-        mvn -B deploy --settings ~/.m2/settings.xml \
-          -DaltDeploymentRepository=nexus-snapshots::default::${{ secrets.NEXUS_URL }}/repository/maven-snapshots/
+        echo "Building and deploying to Nexus..."
+        mvn -B deploy --settings ~/.m2/settings.xml
 
-
-    - name: 🗂 6. Check WAR File Size
+    # ---------------------
+    # 6️⃣ Deploy to Tomcat (only if Nexus deploy succeeds)
+    # ---------------------
+    - name: Deploy to Apache Tomcat
+      if: success()   # ✅ Runs only if previous step succeeded
+      env:
+        TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
+        TOMCAT_USER: ${{ secrets.TOMCAT_USER }}
+        TOMCAT_PASSWORD: ${{ secrets.TOMCAT_PASSWORD }}
       run: |
-        echo "Checking built WAR file size:"
-        find target -name "*.war" -exec ls -lh {} +
-
-    - name: 🚀 7. Deploy WAR to Tomcat
-      run: |
-        WAR_FILE=$(find target -name "*.war" | head -n 1)
+        WAR_FILE=target/TrainBook-1.0.0-SNAPSHOT.war
         echo "Deploying $WAR_FILE to Tomcat..."
-        curl -v -u "${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }}" \
-             -T "$WAR_FILE" \
-             "${{ secrets.TOMCAT_HOST }}/manager/text/deploy?path=/train-ticket-reservation&update=true"
+        curl -T $WAR_FILE "http://${TOMCAT_USER}:${TOMCAT_PASSWORD}@${TOMCAT_HOST}/manager/text/deploy?path=/TrainBook&update=true"
